@@ -13,7 +13,6 @@ class CategoryController extends Controller
     public function index()
     {
         try {
-            // Fetch categories with their associated products
             $categories = DB::table('categories')
                 ->leftJoin('product_category', 'categories.id', '=', 'product_category.category_id')
                 ->leftJoin('products', 'product_category.product_id', '=', 'products.id')
@@ -26,8 +25,6 @@ class CategoryController extends Controller
                 )
                 ->orderBy('categories.id', 'desc')
                 ->paginate(15);
-
-            // Transform the result to nest products under their respective categories
             $categories->getCollection()->transform(function ($item) {
                 $products = DB::table('products')
                     ->join('product_category', 'products.id', '=', 'product_category.product_id')
@@ -119,26 +116,11 @@ class CategoryController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-    }
-
-    /**
      * Display the specified resource.
      */
     public function show(string $id)
     {
     }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $id)
-    {
-    }
-
     /**
      * Update the specified resource in storage.
      */

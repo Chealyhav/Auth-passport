@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
 class ProductController extends Controller
@@ -97,17 +98,15 @@ class ProductController extends Controller
                 'price' => 'required|numeric',
                 'quantity' => 'required|integer',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
-                'categories' => 'required|array',
+                // 'categories' => 'required|array',
                 'categories.*' => 'required|exists:categories,id',
-                'menutags' => 'nullable|array',
+                // 'menutags' => 'nullable|array',
                 'menutags.*' => 'nullable|exists:menu_tags,id',
             ]);
 
-            $image = null;
-            if ($request->hasFile('image')) {
-                $image = Str::random(32).'.'.$request->image->getClientOriginalExtension();
-                $request->image->move(public_path('product'), $image);
-            }
+            // Save the new image
+            $image = Str::random(32).'.'.$request->image->getClientOriginalExtension();
+            $request->image->move(public_path('product'), $image);
 
             $productId = DB::table('products')->insertGetId([
                 'name' => $request->name,
@@ -279,18 +278,32 @@ class ProductController extends Controller
                 'price' => 'required|numeric',
                 'quantity' => 'required|integer',
                 'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,svg|max:2048',
-                'categories' => 'required|array',
                 'categories.*' => 'required|exists:categories,id',
-                'menutags' => 'nullable|array',
                 'menutags.*' => 'nullable|exists:menu_tags,id',
             ]);
 
-            $image = null;
+            // Fetch the current product details
+            $product = DB::table('products')->where('id', $id)->first();
+
+            // Handle image upload
+            $newImage = $product->image;
             if ($request->hasFile('image')) {
-                $image = Str::random(32).'.'.$request->image->getClientOriginalExtension();
-                $request->image->move(public_path('uploads/products'), $image);
+                // Generate a new filename
+                $newImage = Str::random(32).'.'.$request->image->getClientOriginalExtension();
+
+                // Delete the old image file if it exists
+                if ($product->image) {
+                    $oldImagePath = public_path('product/'.$product->image);
+                    if (File::exists($oldImagePath)) {
+                        File::delete($oldImagePath);
+                    }
+                }
+
+                // Move the new image to the directory
+                $request->image->move(public_path('product'), $newImage);
             }
 
+            // Update the product details
             DB::table('products')
                 ->where('id', $id)
                 ->update([
@@ -298,10 +311,11 @@ class ProductController extends Controller
                     'description' => $request->description,
                     'price' => $request->price,
                     'quantity' => $request->quantity,
+                    'image' => $newImage,
                     'updated_at' => now(),
-                    'image' => $image ?? DB::table('products')->where('id', $id)->value('image'),
                 ]);
 
+            // Update categories
             DB::table('product_category')->where('product_id', $id)->delete();
             $categories = array_map(function ($categoryId) use ($id) {
                 return [
@@ -314,6 +328,7 @@ class ProductController extends Controller
 
             DB::table('product_category')->insert($categories);
 
+            // Update menu tags
             DB::table('product_menutag')->where('product_id', $id)->delete();
             if ($request->has('menutags')) {
                 $menutags = array_map(function ($menutagId) use ($id) {
@@ -328,6 +343,7 @@ class ProductController extends Controller
                 DB::table('product_menutag')->insert($menutags);
             }
 
+            // Fetch updated product with related categories and menu tags
             $product = DB::table('products')->where('id', $id)->first();
 
             $categories = DB::table('categories')
@@ -387,14 +403,17 @@ class ProductController extends Controller
         try {
             $product = DB::table('products')->where('id', $id)->first();
             if (!$product) {
-                return response()->json(['message' => 'Data not found'], 404);
+                return response()->json(['message' => 'Product not found'], 404);
             }
-
+            if (File::exists(public_path('product/'.$product->image))) {
+                File::delete(public_path('product/'.$product->image));
+            }
+            // Delete related records first
             DB::table('product_category')->where('product_id', $id)->delete();
             DB::table('product_menutag')->where('product_id', $id)->delete();
             DB::table('products')->where('id', $id)->delete();
 
-            return response()->json(['message' => 'Successfully deleted'], 200);
+            return response()->json(['message' => 'Product successfully deleted'], 200);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
